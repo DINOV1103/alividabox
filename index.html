@@ -150,9 +150,21 @@ button,input{font:inherit}
 .opt input:focus-visible+span{box-shadow:0 0 0 4px rgba(31,86,214,.25)}
 .err{display:none;margin:6px 4px 0;font-size:13px;font-weight:700;color:var(--err)}
 .err.on{display:block}
-.card .cta{width:100%;margin-top:8px;font-size:17px;line-height:1.25}
-.cta.consent{justify-content:flex-start;gap:12px;min-height:68px;padding:12px 16px;text-align:left;font-size:14px;font-weight:800;line-height:1.38;letter-spacing:0}
-.cta.consent svg{width:28px;height:28px}
+.send-err{margin-top:10px;padding:10px 12px;border-radius:12px;background:#fff1f1;border:1px solid #ffd0d0;text-align:center}
+.card .cta{width:100%;margin-top:12px;font-size:17px;line-height:1.25}
+.consent-btn{display:flex;align-items:center;gap:12px;width:100%;margin-top:4px;padding:12px 14px;border-radius:16px;cursor:pointer;text-align:left;
+  background:var(--ice);border:1.5px solid var(--line);color:var(--navy);font-size:13.5px;font-weight:700;line-height:1.4;
+  transition:border-color .2s,background .2s,box-shadow .2s;-webkit-tap-highlight-color:transparent}
+.consent-btn:active{transform:scale(.99)}
+.consent-btn:focus-visible{box-shadow:0 0 0 4px rgba(31,86,214,.2)}
+.tick{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:50%;background:#fff;border:2px solid #b7c3e0;transition:background .2s,border-color .2s,box-shadow .2s,transform .25s}
+.tick svg{width:17px;height:17px;color:#fff;opacity:0;transform:scale(.3);transition:opacity .2s,transform .25s cubic-bezier(.3,1.6,.5,1)}
+.consent-btn.on{border-color:#14a06b;background:#ebfaf2;box-shadow:0 0 0 4px rgba(20,160,107,.12)}
+.consent-btn.on .tick{background:#14a06b;border-color:#14a06b;box-shadow:0 4px 12px rgba(20,160,107,.4)}
+.consent-btn.on .tick svg{opacity:1;transform:scale(1)}
+.consent-btn.bad{border-color:var(--err);background:#fff7f7}
+.send-wrap{animation:rise .35s ease both}
+@keyframes rise{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 .cta[disabled]{opacity:.75;pointer-events:none}
 .safe{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:10px;font-size:12.5px;font-weight:600;color:var(--muted)}
 .safe svg{width:15px;height:15px;color:#14a06b}
@@ -314,11 +326,18 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
           <div class="err" id="ePhone"></div>
         </div>
 
-        <button class="cta consent" type="submit" id="sendBtn">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9.5"/><path d="M7.5 12.5l3 3 6-6.5"/></svg>
-          <span>Барча маълумотлар тўғрилигига ишонч ҳосил қилдим ва мутахассис қўнғироқ қилишига розилик билдираман</span>
+        <button type="button" class="consent-btn" id="consentBtn" aria-pressed="false">
+          <span class="tick"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span>
+          <span class="consent-text">Барча маълумотлар тўғрилигига ишонч ҳосил қилдим ва мутахассис қўнғироқ қилишига розилик билдираман</span>
         </button>
-        <div class="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Тугмани боссангизгина ариза юборилади</div>
+        <div class="err" id="eConsent"></div>
+
+        <div class="send-wrap" id="sendWrap" hidden>
+          <button class="cta" type="submit" id="sendBtn"><span>Аризани юбориш</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
+        </div>
+        <div class="err send-err" id="eSend" role="alert"></div>
+        <div class="safe"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>Ариза фақат юбориш тугмаси босилганда кетади</div>
       </form>
 
       <div class="success" id="successBox" hidden aria-live="polite">
@@ -355,21 +374,29 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
                   '🕒 <b>Вақти:</b> ' + timeStr + '\n' +
                   '🌐 <b>Манба:</b> Alivida Landing Page (GitHub)';
     function trySend(idx) {
-      if (idx >= groupCandidates.length) return;
-      fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
+      if (idx >= groupCandidates.length) return Promise.resolve(false);
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 12000) : null;
+      return fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: groupCandidates[idx], text: message, parse_mode: 'HTML' })
+        body: JSON.stringify({ chat_id: groupCandidates[idx], text: message, parse_mode: 'HTML' }),
+        signal: ctrl ? ctrl.signal : undefined
       })
       .then(function (r) { return r.json(); })
-      .then(function (r) { if (!r.ok) trySend(idx + 1); })
-      .catch(function () { trySend(idx + 1); });
+      .then(function (r) { clearTimeout(timer); return r.ok ? true : trySend(idx + 1); })
+      .catch(function () { clearTimeout(timer); return trySend(idx + 1); });
     }
-    trySend(0);
+    return trySend(0);
   }
 
   var form = document.getElementById('leadForm');
   var btn = document.getElementById('sendBtn');
   var whomBox = document.getElementById('cWhom');
+  var sendErr = document.getElementById('eSend');
+  var consentBtn = document.getElementById('consentBtn');
+  var consentErr = document.getElementById('eConsent');
+  var sendWrap = document.getElementById('sendWrap');
+  var agreed = false;
   function byId(id) { return document.getElementById(id); }
   var F = {
     problem: { input: byId('fProblem'), ctrl: byId('cProblem'), err: byId('eProblem') },
@@ -403,15 +430,10 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
     if (t === F.problem.input) (whomBox.querySelector('input:checked') || whomBox.querySelector('input')).focus();
     else if (t.name === 'Whom') F.name.input.focus();
     else if (t === F.name.input) F.phone.input.focus();
-    else if (t === F.phone.input) { t.blur(); btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+    else if (t === F.phone.input) { t.blur(); consentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
   });
 
-  var submitted = false;
-  form.addEventListener('submit', function (e) {
-    e.preventDefault();
-    if (e.submitter && e.submitter !== btn) return;
-    if (submitted) return;
-
+  function collect() {
     var data = {
       problem: F.problem.input.value.trim(),
       whom: whomValue(),
@@ -428,19 +450,75 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
     if (bad.length) {
       bad[0].ctrl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (bad[0] !== F.whom) bad[0].input.focus({ preventScroll: true });
+      return null;
+    }
+    return data;
+  }
+
+  function setAgreed(on) {
+    agreed = on;
+    consentBtn.classList.toggle('on', on);
+    consentBtn.classList.remove('bad');
+    consentBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    consentErr.classList.remove('on');
+    sendErr.classList.remove('on');
+    sendWrap.hidden = !on;
+  }
+
+  /* maydon to'ldirilsa, rozilik tugmasi ostidagi eslatma o'chadi */
+  function clearConsentHint() { consentErr.classList.remove('on'); consentBtn.classList.remove('bad'); }
+  form.addEventListener('input', clearConsentHint);
+  form.addEventListener('change', clearConsentHint);
+
+  /* 1-qadam: rozilik — maydonlar to'g'ri bo'lsa yashil belgi va "Юбориш" tugmasi chiqadi */
+  consentBtn.addEventListener('click', function () {
+    if (agreed) { setAgreed(false); return; }
+    if (!collect()) {
+      consentErr.textContent = 'Аввал барча саволларга жавоб беринг';
+      consentErr.classList.add('on');
       return;
     }
+    setAgreed(true);
+    setTimeout(function () { btn.scrollIntoView({ behavior: 'smooth', block: 'center' }); }, 120);
+  });
+
+  /* 2-qadam: faqat "Аризани юбориш" tugmasi arizani jo'natadi */
+  var submitted = false;
+  form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    if (e.submitter && e.submitter !== btn) return;
+    if (submitted) return;
+    if (!agreed) {
+      consentBtn.classList.add('bad');
+      consentErr.textContent = 'Илтимос, розилик тугмасини босинг';
+      consentErr.classList.add('on');
+      consentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    var data = collect();
+    if (!data) return;
 
     submitted = true;
-    trackMetaLead();
+    var label = btn.querySelector('span'), labelText = label.textContent;
     btn.disabled = true;
-    btn.querySelector('span').textContent = 'Юборилмоқда...';
+    label.textContent = 'Юборилмоқда...';
+    sendErr.classList.remove('on');
     data.phone = '+998 ' + F.phone.input.value;
-    sendToTelegram(data);
 
-    form.hidden = true;
-    byId('successBox').hidden = false;
-    byId('card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+    sendToTelegram(data).then(function (ok) {
+      if (ok) {
+        trackMetaLead();
+        form.hidden = true;
+        byId('successBox').hidden = false;
+        byId('card').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      } else {
+        submitted = false;
+        btn.disabled = false;
+        label.textContent = labelText;
+        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.';
+        sendErr.classList.add('on');
+      }
+    });
   });
 
 
