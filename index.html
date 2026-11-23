@@ -231,7 +231,24 @@ s.parentNode.insertBefore(t,s)}(window, document,'script',
 fbq('init', '1669087454197560');
 fbq('init', '2185905285373591');
 fbq('track', 'PageView');
-function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fbq('track', 'Lead'); } catch (e) {} }
+/* Lead: brauzer pikseli + server (Conversions API) bitta event_id bilan — Meta ularni dublikat deb hisoblamaydi */
+function metaCookie(n) { var m = document.cookie.match('(?:^|; )' + n + '=([^;]*)'); return m ? decodeURIComponent(m[1]) : ''; }
+function metaFbc() {
+  var c = metaCookie('_fbc'); if (c) return c;
+  var id = new URLSearchParams(location.search).get('fbclid');
+  return id ? 'fb.1.' + Date.now() + '.' + id : '';
+}
+function trackMetaLead(lead) {
+  var eventId = 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+  try { if (typeof window.fbq === 'function') window.fbq('track', 'Lead', { content_name: 'Joint & Bone Complex' }, { eventID: eventId }); } catch (e) {}
+  if (!/^https?:$/.test(location.protocol) || !lead) return;
+  try {
+    fetch('/api/capi', {
+      method: 'POST', keepalive: true, headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_id: eventId, phone: '998' + lead.digits, name: lead.name, url: location.href, fbp: metaCookie('_fbp'), fbc: metaFbc() })
+    }).catch(function () {});
+  } catch (e) {}
+}
 </script>
 <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=1669087454197560&ev=PageView&noscript=1" alt=""><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=2185905285373591&ev=PageView&noscript=1" alt=""></noscript>
 <!-- End Meta Pixel Code -->
@@ -343,7 +360,7 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
       <div class="success" id="successBox" hidden aria-live="polite">
         <div class="success-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
         <h2>Раҳмат! Аризангиз қабул қилинди.</h2>
-        <p>Тез орада сиз билан мутахассисимиз <b>71 209 29 29</b> рақами орқали боғланади.</p>
+        <p>Тез орада сиз билан мутахассисимиз <b>55 515 55 58</b> рақами орқали боғланади.</p>
       </div>
     </div>
 
@@ -503,11 +520,12 @@ function trackMetaLead() { try { if (typeof window.fbq === 'function') window.fb
     btn.disabled = true;
     label.textContent = 'Юборилмоқда...';
     sendErr.classList.remove('on');
+    var digits = data.phone;
     data.phone = '+998 ' + F.phone.input.value;
 
     sendToTelegram(data).then(function (ok) {
       if (ok) {
-        trackMetaLead();
+        trackMetaLead({ digits: digits, name: data.name });
         form.hidden = true;
         byId('successBox').hidden = false;
         byId('card').scrollIntoView({ behavior: 'smooth', block: 'center' });
