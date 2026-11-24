@@ -24,7 +24,7 @@
 export const config = { runtime: 'edge' };
 
 const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbx2_7rgdJ4zkvMyO6ilMHMpGJxVxltp8LwNivegzGl02eG4E3zclMH3bYElRO_L9PA/exec';
-const PHONE_RE = /^(20|33|50|55|77|88|90|91|93|94|95|97|98|99|6[1-9]|7[0-9])\d{7}$/;
+const PHONE_RE = /^\d{9}$/;   // istalgan 9 xonali raqam (operator kodi tekshirilmaydi)
 const TOKEN_RE = /^\d{6,12}:[A-Za-z0-9_-]{30,}$/;
 const MIN_FILL_MS = 3000;
 const IP_LIMIT = 10;                 // bitta IP'dan 10 daqiqada ko'pi bilan 10 ariza (bitta server nusxasi doirasida)
@@ -166,7 +166,7 @@ export default async function handler(req) {
   const whom = clean(b.whom, 100);
   const source = clean(b.source, 60) || 'Alivida Landing Page';
 
-  if (name.length < 2 || !PHONE_RE.test(phone) || /^(\d)\1+$/.test(phone.slice(2)) || !detail || !whom) {
+  if (!name || !PHONE_RE.test(phone) || /^(\d)\1{8}$/.test(phone) || !detail || !whom) {
     return json({ ok: false, error: 'input' }, 400);
   }
 
