@@ -163,7 +163,10 @@ button,input{font:inherit}
 .consent-btn.on{border-color:#14a06b;background:#ebfaf2;box-shadow:0 0 0 4px rgba(20,160,107,.12)}
 .consent-btn.on .tick{background:#14a06b;border-color:#14a06b;box-shadow:0 4px 12px rgba(20,160,107,.4)}
 .consent-btn.on .tick svg{opacity:1;transform:scale(1)}
-.consent-btn.bad{border-color:var(--err);background:#fff7f7}
+.consent-btn.bad{border-color:var(--err);background:#ffe3e3;color:#b4161b;box-shadow:0 0 0 4px rgba(229,72,77,.22);animation:shake .45s}
+.consent-btn.bad .tick{border-color:var(--err);background:#ffd0d0}
+@keyframes shake{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+#eConsent.warn{color:#fff;background:var(--err);border-radius:10px;padding:8px 12px;text-align:center;font-size:14px}
 .send-wrap{animation:rise .35s ease both}
 @keyframes rise{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:none}}
 .cta[disabled]{opacity:.75;pointer-events:none}
@@ -351,7 +354,7 @@ function trackMetaLead(lead) {
         </button>
         <div class="err" id="eConsent"></div>
 
-        <div class="send-wrap" id="sendWrap" hidden>
+        <div class="send-wrap" id="sendWrap">
           <button class="cta" type="submit" id="sendBtn"><span>Аризани юбориш</span>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4z"/></svg></button>
         </div>
@@ -479,13 +482,21 @@ function trackMetaLead(lead) {
     consentBtn.classList.toggle('on', on);
     consentBtn.classList.remove('bad');
     consentBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    consentErr.classList.remove('on');
+    consentErr.classList.remove('on', 'warn');
     sendErr.classList.remove('on');
-    sendWrap.hidden = !on;
+  }
+
+  /* yuborish bosildi, lekin rozilik tugmasi bosilmagan: tugma qizil bo'ladi va eslatma chiqadi */
+  function askConsent(msg) {
+    consentBtn.classList.remove('bad'); void consentBtn.offsetWidth;      // silkinish har safar qaytadan
+    consentBtn.classList.add('bad');
+    consentErr.textContent = msg;
+    consentErr.classList.add('on', 'warn');
+    consentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 
   /* maydon to'ldirilsa, rozilik tugmasi ostidagi eslatma o'chadi */
-  function clearConsentHint() { consentErr.classList.remove('on'); consentBtn.classList.remove('bad'); }
+  function clearConsentHint() { if (!consentBtn.classList.contains('bad')) consentErr.classList.remove('on'); }
   form.addEventListener('input', clearConsentHint);
   form.addEventListener('change', clearConsentHint);
 
@@ -494,6 +505,7 @@ function trackMetaLead(lead) {
     if (agreed) { setAgreed(false); return; }
     if (!collect()) {
       consentErr.textContent = 'Аввал барча саволларга жавоб беринг';
+      consentErr.classList.remove('warn');
       consentErr.classList.add('on');
       return;
     }
@@ -507,15 +519,9 @@ function trackMetaLead(lead) {
     e.preventDefault();
     if (e.submitter && e.submitter !== btn) return;
     if (submitted) return;
-    if (!agreed) {
-      consentBtn.classList.add('bad');
-      consentErr.textContent = 'Илтимос, розилик тугмасини босинг';
-      consentErr.classList.add('on');
-      consentBtn.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      return;
-    }
-    var data = collect();
+    var data = collect();                    // avval maydonlar tekshiriladi
     if (!data) return;
+    if (!agreed) { askConsent('☝️ Илтимос, аввал юқоридаги розилик тугмасини босинг'); return; }
 
     submitted = true;
     var label = btn.querySelector('span'), labelText = label.textContent;
