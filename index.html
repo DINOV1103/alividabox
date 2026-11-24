@@ -204,25 +204,39 @@ function trackMetaLead(lead) {
 
 <script>
 (function () {
-  /* ---- Ariza serverga (/api/lead) yuboriladi: bot tokeni sahifada yo'q ---- */
+  /* ---- Ariza Google Apps Script'ga yuboriladi: Google Sheets'ga yoziladi va Telegram'ga ketadi.
+         Apps Script javob bermasa — zaxira sifatida /api/lead (Vercel) ishlatiladi. Bot tokeni sahifada yo'q. ---- */
+  var LEAD_URL = 'https://script.google.com/macros/s/AKfycbx2_7rgdJ4zkvMyO6ilMHMpGJxVxltp8LwNivegzGl02eG4E3zclMH3bYElRO_L9PA/exec';
   var LOADED_AT = Date.now();
 
-  function sendToTelegram(d) {
+  function postJson(url, payload, plain, ms) {
     var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
-    var hp = document.getElementById('fWebsite');
-    return fetch('/api/lead', {
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, ms) : null;
+    return fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        name: d.name, phone: d.digits, detail: d.detail, whom: d.whom,
-        website: hp ? hp.value : '', t: Date.now() - LOADED_AT, source: 'Alivida Landing (yangi)'
-      }),
+      headers: { 'Content-Type': plain ? 'text/plain;charset=utf-8' : 'application/json' },
+      body: JSON.stringify(payload),
+      redirect: 'follow',
       signal: ctrl ? ctrl.signal : undefined
     })
     .then(function (r) { return r.json(); })
-    .then(function (j) { clearTimeout(timer); window.__leadErr = j.error || ''; return !!j.ok; })
-    .catch(function () { clearTimeout(timer); window.__leadErr = 'net'; return false; });
+    .then(function (j) { clearTimeout(timer); return j || {}; })
+    .catch(function () { clearTimeout(timer); return { ok: false, error: 'net' }; });
+  }
+
+  function sendToTelegram(d) {
+    var hp = document.getElementById('fWebsite');
+    var payload = {
+      name: d.name, phone: d.digits, detail: d.detail, whom: d.whom,
+      website: hp ? hp.value : '', t: Date.now() - LOADED_AT, source: 'Alivida Landing (yangi)'
+    };
+    return postJson(LEAD_URL, payload, true, 20000).then(function (j) {
+      if (j.ok) return true;
+      return postJson('/api/lead', payload, false, 15000).then(function (k) {
+        window.__leadErr = k.error || j.error || '';
+        return !!k.ok;
+      });
+    });
   }
 
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
