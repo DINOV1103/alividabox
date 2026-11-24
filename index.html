@@ -81,6 +81,7 @@ button,input{font:inherit}
 .send-err.on{display:block}
 .success{text-align:center;padding:25px 15px;font-size:20px;font-weight:700;line-height:1.5;text-shadow:0 2px 8px rgba(0,0,0,.9)}
 .success span{display:block;margin-top:10px;font-size:16px;font-weight:500;color:#ddd}
+.hp{position:absolute!important;left:-10000px!important;width:1px;height:1px;opacity:0;pointer-events:none}
 [hidden]{display:none!important}
 
 /* ===== mobile ===== */
@@ -161,6 +162,7 @@ function trackMetaLead(lead) {
     <h2>Рўйхатдан ўтинг ва маслаҳат олинг</h2>
 
     <form id="leadForm" novalidate>
+      <input type="text" name="website" id="fWebsite" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
       <div class="field">
         <input class="inp" type="text" name="Name" id="fName" autocomplete="name" placeholder="Исмингизни киритинг" maxlength="60">
         <div class="err" id="eName"></div>
@@ -202,43 +204,32 @@ function trackMetaLead(lead) {
 
 <script>
 (function () {
-  /* ---- Telegram sozlamalari ---- */
-  var botToken = '8896180240:AAHDrlX2CG2t07VV0jzC_5g0jDrugLbenDk';
-  var groupCandidates = ['-1003837735629', '-3837735629', '3837735629'];
+  /* ---- Ariza serverga (/api/lead) yuboriladi: bot tokeni sahifada yo'q ---- */
+  var LOADED_AT = Date.now();
+
+  function sendToTelegram(d) {
+    var ctrl = window.AbortController ? new AbortController() : null;
+    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+    var hp = document.getElementById('fWebsite');
+    return fetch('/api/lead', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: d.name, phone: d.digits, detail: d.detail, whom: d.whom,
+        website: hp ? hp.value : '', t: Date.now() - LOADED_AT, source: 'Alivida Landing (yangi)'
+      }),
+      signal: ctrl ? ctrl.signal : undefined
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (j) { clearTimeout(timer); return !!j.ok; })
+    .catch(function () { clearTimeout(timer); return false; });
+  }
 
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
   var PHONE_MSG = 'Рақамни тўлиқ киритинг (9 та рақам)';
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
-  function sendToTelegram(d) {
-    var now = new Date();
-    var timeStr = now.toLocaleDateString('uz-UZ') + ' ' + now.toLocaleTimeString('uz-UZ');
-    var message = '🔵 <b>ЯНГИ БУЮРТМА (ALIVIDA ORGANIC)</b> 🔵\n\n' +
-                  '👤 <b>Исми:</b> ' + esc(d.name) + '\n' +
-                  '📞 <b>Телефони:</b> ' + esc(d.phone) + '\n' +
-                  '🦴 <b>Оғриқ жойи:</b> ' + esc(d.detail) + '\n' +
-                  '👥 <b>Ким учун:</b> ' + esc(d.whom) + '\n' +
-                  '✅ <b>Розилик:</b> берилди\n' +
-                  '🕒 <b>Вақти:</b> ' + timeStr + '\n' +
-                  '🌐 <b>Манба:</b> Alivida Landing Page (GitHub)';
-
-    function trySend(idx) {
-      if (idx >= groupCandidates.length) return Promise.resolve(false);
-      var ctrl = window.AbortController ? new AbortController() : null;
-      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 12000) : null;
-      return fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: groupCandidates[idx], text: message, parse_mode: 'HTML' }),
-        signal: ctrl ? ctrl.signal : undefined
-      })
-      .then(function (res) { return res.json(); })
-      .then(function (r) { clearTimeout(timer); return r.ok ? true : trySend(idx + 1); })
-      .catch(function () { clearTimeout(timer); return trySend(idx + 1); });
-    }
-    return trySend(0);
-  }
 
   var form = document.getElementById('leadForm');
   var nameEl = document.getElementById('fName');
