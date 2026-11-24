@@ -84,10 +84,19 @@ export default async function handler(req) {
       region: process.env.VERCEL_REGION || 'unknown',
       token_set: !!envToken(), chat_set: !!envChat(), chat_id: envChat() || null,
     };
-    const g = await timed('https://www.google.com/generate_204', {}, 5000);
+    const tok = envToken();
+    out.token_format = /^\d{6,12}:[A-Za-z0-9_-]{30,}$/.test(tok) ? 'ok' : 'XATO (uzunligi ' + tok.length + ' belgi)';
+    out.token_bot_id = (tok.split(':')[0] || '').replace(/\D/g, '') || null;   // bot ID maxfiy emas
+    const [g, t, inv, gm] = await Promise.all([
+      timed('https://www.google.com/generate_204', {}, 5000),
+      timed('https://api.telegram.org/', {}, 8000),
+      timed('https://api.telegram.org/bot1:invalid/getMe', {}, 8000),
+      tok ? timed(`https://api.telegram.org/bot${tok}/getMe`, {}, 8000) : Promise.resolve({ err: 'no token', ms: 0 }),
+    ]);
     out.internet = g.err ? 'XATO: ' + g.err : 'ok ' + g.ms + 'ms';
-    const t = await timed('https://api.telegram.org/', {}, 8000);
     out.telegram_reach = t.err ? 'XATO: ' + t.err + ' (' + t.ms + 'ms)' : 'ok ' + t.ms + 'ms';
+    out.probe_invalid_token = inv.err ? 'XATO: ' + inv.err + ' (' + inv.ms + 'ms)' : 'HTTP ' + inv.r.status + ' ' + inv.ms + 'ms';
+    out.getme_get = gm.err ? 'XATO: ' + gm.err + ' (' + gm.ms + 'ms)' : 'HTTP ' + gm.r.status + ' ' + gm.ms + 'ms ' + (await gm.r.text()).slice(0, 160);
     if (out.token_set && !t.err) {
       const me = await tg('getMe');
       out.bot = me.ok ? '@' + me.result.username : 'XATO: ' + (me.description || me.error_code);
