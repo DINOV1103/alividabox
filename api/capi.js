@@ -8,6 +8,15 @@ const crypto = require('crypto');
 const PIXEL_ID = process.env.META_PIXEL_ID || '2185905285373591';
 const API_VERSION = 'v26.0';
 
+function originAllowed(req) {
+  const origin = String(req.headers.origin || '');
+  if (!origin) return false;
+  const list = String(process.env.ALLOWED_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  if (list.length) return list.includes(origin);
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  return origin === 'https://' + host;
+}
+
 const sha256 = (v) => crypto.createHash('sha256').update(String(v).trim().toLowerCase(), 'utf8').digest('hex');
 
 module.exports = async (req, res) => {
@@ -19,6 +28,11 @@ module.exports = async (req, res) => {
   const token = process.env.META_CAPI_TOKEN;
   if (!token) {
     res.status(500).json({ ok: false, error: 'META_CAPI_TOKEN is not set' });
+    return;
+  }
+
+  if (!originAllowed(req)) {
+    res.status(403).json({ ok: false, error: 'forbidden' });
     return;
   }
 
