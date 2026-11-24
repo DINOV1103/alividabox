@@ -24,7 +24,8 @@ const WINDOW_MS = 10 * 60 * 1000;
 const byIp = new Map();
 
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
-const envToken = () => String(process.env.TG_BOT_TOKEN || '').trim();
+// Token ko'chirilganda tasodifan qo'shilgan qo'shtirnoq, bo'sh joy yoki "bot" so'zi olib tashlanadi
+const envToken = () => String(process.env.TG_BOT_TOKEN || '').trim().replace(/^['"]|['"]$/g, '').replace(/^bot/, '').trim();
 const envChat = () => String(process.env.TG_CHAT_ID || '').trim();
 
 const json = (obj, status = 200) => new Response(JSON.stringify(obj), {
