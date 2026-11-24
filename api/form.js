@@ -16,7 +16,7 @@
 
 export const config = { runtime: 'edge' };
 
-const PHONE_RE = /^(20|33|50|55|77|88|90|91|93|94|95|97|98|99|6[1-9]|7[0-9])\d{7}$/;
+const PHONE_RE = /^\d{9}$/;   // istalgan 9 xonali raqam (operator kodi tekshirilmaydi)
 const MIN_FILL_MS = 3000;
 const IP_LIMIT = 10;                 // bitta IP'dan 10 daqiqada ko'pi bilan 10 ta
 const WINDOW_MS = 10 * 60 * 1000;
@@ -74,7 +74,7 @@ export default async function handler(req) {
   const phone = String(b.phone || '').replace(/\D/g, '').replace(/^998(?=\d{9}$)/, '');
   const detail = clean(b.detail, 200);
   const whom = clean(b.whom, 100);
-  if (name.length < 2 || !PHONE_RE.test(phone) || /^(\d)\1+$/.test(phone.slice(2)) || !detail || !whom) {
+  if (!name || !PHONE_RE.test(phone) || /^(\d)\1{8}$/.test(phone) || !detail || !whom) {
     return json({ ok: false, error: 'input' }, 400);
   }
 
