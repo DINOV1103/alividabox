@@ -33,7 +33,6 @@ body{font-family:Montserrat,"Segoe UI",Roboto,Arial,sans-serif;color:var(--ink);
 img{display:block;max-width:100%;height:auto}
 a{color:inherit;text-decoration:none}
 button,input{font:inherit}
-.hp{position:absolute!important;left:-10000px!important;width:1px;height:1px;opacity:0;pointer-events:none}
 [hidden]{display:none!important}
 
 /* ---------- shared bits ---------- */
@@ -301,7 +300,6 @@ function trackMetaLead(lead) {
 
     <div class="card" id="card">
       <form id="leadForm" novalidate>
-      <input type="text" name="website" id="fWebsite" class="hp" tabindex="-1" autocomplete="off" aria-hidden="true">
         <div class="card-kicker">1 қутида 3 та маҳсулот</div>
         <h2>Рўйхатдан ўтинг ва маслаҳат олинг</h2>
         <p class="card-sub">Саволларга жавоб беринг — мутахассисимиз сиз билан боғланади ва сизга мос тартибни тавсия қилади.</p>
@@ -371,88 +369,9 @@ function trackMetaLead(lead) {
 
 <script>
 (function () {
-  /* ---- 1) Ariza mijozning brauzeridan to'g'ridan-to'g'ri Telegram'ga yuboriladi.
-            Bot tokeni sahifa kodida YO'Q: u Vercel sozlamalarida turadi va /api/form orqali faqat
-            to'g'ri to'ldirilgan formaga, aralashtirilgan holda, yuborish paytida beriladi.
-         2) Telegram'ga ketmasa — Google Sheets'ga yoziladi (Apps Script), lead yo'qolmaydi.
-         3) Apps Script ham javob bermasa — /api/lead (Vercel) ham Telegram'ga, ham jadvalga yuboradi. ---- */
-  var LEAD_URL = 'https://script.google.com/macros/s/AKfycbx2_7rgdJ4zkvMyO6ilMHMpGJxVxltp8LwNivegzGl02eG4E3zclMH3bYElRO_L9PA/exec';
-  var LOADED_AT = Date.now();
-
-  function postJson(url, payload, plain, ms) {
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, ms) : null;
-    return fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': plain ? 'text/plain;charset=utf-8' : 'application/json' },
-      body: JSON.stringify(payload),
-      redirect: 'follow',
-      signal: ctrl ? ctrl.signal : undefined
-    })
-    .then(function (r) { return r.json(); })
-    .then(function (j) { clearTimeout(timer); return j || {}; })
-    .catch(function () { clearTimeout(timer); return { ok: false, error: 'net' }; });
-  }
-
-  var TG_HOST = ['api', 'telegram', 'org'].join('.');
-
-  function unpack(a, b) {
-    try {
-      var x = atob(a), k = atob(b), r = '';
-      for (var i = 0; i < x.length; i++) r += String.fromCharCode(x.charCodeAt(i) ^ k.charCodeAt(i % k.length) ^ ((i * 7) & 255));
-      return decodeURIComponent(escape(r)).split('\n');
-    } catch (e) { return []; }
-  }
-
-  function leadText(d, source) {
-    var pretty = '+998 ' + d.digits.replace(/^(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4');
-    var time = new Date().toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' });
-    return '🔵 <b>ЯНГИ БУЮРТМА (ALIVIDA ORGANIC)</b> 🔵\n\n' +
-      '👤 <b>Исми:</b> ' + esc(d.name) + '\n' +
-      '📞 <b>Телефони:</b> ' + esc(pretty) + '\n' +
-      '🦴 <b>Оғриқ жойи:</b> ' + esc(d.detail) + '\n' +
-      '👥 <b>Ким учун:</b> ' + esc(d.whom) + '\n' +
-      '✅ <b>Розилик:</b> берилди\n' +
-      '🕒 <b>Вақти:</b> ' + time + '\n' +
-      '🌐 <b>Манба:</b> ' + esc(source);
-  }
-
-  // 1-yo'l: mijoz brauzeridan Telegram'ga
-  function sendDirect(d, payload) {
-    return postJson('/api/form', payload, false, 10000).then(function (k) {
-      if (!k.ok) return { ok: false, error: k.error || 'form' };
-      if (!k.a) return { ok: true };                       // bot/spam: jim "ok", hech narsa yuborilmaydi
-      var p = unpack(k.a, k.b);
-      if (p.length < 2 || !p[0] || !p[1]) return { ok: false, error: 'cfg' };
-      return postJson('https://' + TG_HOST + '/bot' + p[0] + '/sendMessage',
-        { chat_id: p[1], text: leadText(d, payload.source), parse_mode: 'HTML' }, false, 15000)
-        .then(function (j) { return j.ok ? { ok: true } : { ok: false, error: 'tg_' + (j.error_code || 'net') }; });
-    });
-  }
-
-  function sendToTelegram(d) {
-    var hp = document.getElementById('fWebsite');
-    var payload = {
-      name: d.name, phone: d.digits, detail: d.detail, whom: d.whom,
-      website: hp ? hp.value : '', t: Date.now() - LOADED_AT, source: 'Alivida Landing (eski)'
-    };
-    return sendDirect(d, payload).then(function (r) {
-      if (r.ok) return true;
-      // 2-yo'l: Google Sheets'ga yoziladi (Telegram ishlamasa ham lead yo'qolmaydi)
-      return postJson(LEAD_URL, payload, true, 20000).then(function (j) {
-        if (j.ok) {
-          /* jadvalga yozildi; Telegram Apps Script'da o'xshamagan bo'lsa — Vercel orqali yana bir urinish */
-          if (j.tg === false) postJson('/api/lead', payload, false, 15000);
-          return true;
-        }
-        // 3-yo'l: Vercel server (Telegram + jadval)
-        return postJson('/api/lead', payload, false, 15000).then(function (k) {
-          window.__leadErr = k.ok ? '' : [r.error, j.error, k.error].filter(Boolean).join(' / ');
-          return !!k.ok;
-        });
-      });
-    });
-  }
+  /* ---- Telegram ---- */
+  var botToken = '8928508709:AAFH-qdtpCkOpNUr0NJNR66EQkLPSHZMz44';
+  var groupCandidates = ['-1005236600118'];
 
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
   var PICK_MSG = 'Илтимос, бирини танланг';
@@ -460,6 +379,32 @@ function trackMetaLead(lead) {
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+  function sendToTelegram(d) {
+    var now = new Date();
+    var timeStr = now.toLocaleDateString('uz-UZ') + ' ' + now.toLocaleTimeString('uz-UZ');
+    var message = '🔵 <b>ЯНГИ БУЮРТМА (ALIVIDA ORGANIC)</b> 🔵\n\n' +
+                  '👤 <b>Исми:</b> ' + esc(d.name) + '\n' +
+                  '📞 <b>Телефони:</b> ' + esc(d.phone) + '\n' +
+                  '🦴 <b>Муаммо:</b> ' + esc(d.problem) + '\n' +
+                  '👥 <b>Ким учун:</b> ' + esc(d.whom) + '\n' +
+                  '✅ <b>Розилик:</b> берилди\n' +
+                  '🕒 <b>Вақти:</b> ' + timeStr + '\n' +
+                  '🌐 <b>Манба:</b> Alivida Landing Page (GitHub)';
+    function trySend(idx) {
+      if (idx >= groupCandidates.length) return Promise.resolve(false);
+      var ctrl = window.AbortController ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 12000) : null;
+      return fetch('https://api.telegram.org/bot' + botToken + '/sendMessage', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: groupCandidates[idx], text: message, parse_mode: 'HTML' }),
+        signal: ctrl ? ctrl.signal : undefined
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (r) { clearTimeout(timer); return r.ok ? true : trySend(idx + 1); })
+      .catch(function () { clearTimeout(timer); return trySend(idx + 1); });
+    }
+    return trySend(0);
+  }
 
   var form = document.getElementById('leadForm');
   var btn = document.getElementById('sendBtn');
@@ -578,7 +523,7 @@ function trackMetaLead(lead) {
     var digits = data.phone;
     data.phone = '+998 ' + F.phone.input.value;
 
-    sendToTelegram({ name: data.name, digits: digits, detail: data.problem, whom: data.whom }).then(function (ok) {
+    sendToTelegram(data).then(function (ok) {
       if (ok) {
         trackMetaLead({ digits: digits, name: data.name });
         form.hidden = true;
@@ -588,7 +533,7 @@ function trackMetaLead(lead) {
         submitted = false;
         btn.disabled = false;
         label.textContent = labelText;
-        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
+        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.';
         sendErr.classList.add('on');
       }
     });
