@@ -1,7 +1,6 @@
 {
   "regions": ["fra1"],
   "functions": {
-    "api/capi.js": { "maxDuration": 30 },
-    "api/net.js": { "maxDuration": 30 }
+    "api/capi.js": { "maxDuration": 30 }
   }
 }
