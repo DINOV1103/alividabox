@@ -388,8 +388,8 @@ function trackMetaLead(lead) {
       signal: ctrl ? ctrl.signal : undefined
     })
     .then(function (r) { return r.json(); })
-    .then(function (j) { clearTimeout(timer); return !!j.ok; })
-    .catch(function () { clearTimeout(timer); return false; });
+    .then(function (j) { clearTimeout(timer); window.__leadErr = j.error || ''; return !!j.ok; })
+    .catch(function () { clearTimeout(timer); window.__leadErr = 'net'; return false; });
   }
 
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
@@ -526,7 +526,7 @@ function trackMetaLead(lead) {
         submitted = false;
         btn.disabled = false;
         label.textContent = labelText;
-        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.';
+        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
         sendErr.classList.add('on');
       }
     });

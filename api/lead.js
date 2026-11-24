@@ -6,20 +6,54 @@
 //   Ixtiyoriy:
 //     ALLOWED_ORIGINS = https://alividabox.vercel.app,https://alivida.uz   (vergul bilan)
 //
+// Tekshirish: brauzerda  /api/lead?check=1  ni oching — token, guruh va bot holatini ko'rsatadi
+// (tokenning o'zi hech qachon ko'rsatilmaydi).
+//
 // Spamga qarshi: boshqa saytlardan kelgan so'rov rad etiladi, yashirin "tuzoq" maydon,
 // juda tez yuborilgan forma, noto'g'ri raqam, bir IP'dan ko'p ariza va bir xil raqamni
 // qayta-qayta yuborish to'xtatiladi.
+
+const https = require('https');
 
 const PHONE_RE = /^(20|33|50|55|77|88|90|91|93|94|95|97|98|99|6[1-9]|7[0-9])\d{7}$/;
 const MIN_FILL_MS = 3000;            // formani 3 soniyadan tez to'ldirib bo'lmaydi
 const IP_LIMIT = 10;                 // bitta IP'dan 10 daqiqada ko'pi bilan 10 ariza (mobil operatorlarda ko'p odam bitta IP'da bo'ladi)
 const WINDOW_MS = 10 * 60 * 1000;
+const TG_TIMEOUT_MS = 7000;
 
 const byIp = new Map();              // ip -> [vaqtlar]
-const byPhone = new Map();           // raqam -> oxirgi vaqt
+const sentPhones = new Map();        // raqam -> muvaffaqiyatli yuborilgan vaqt
 
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 const clean = (v, max) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().slice(0, max);
+const envToken = () => String(process.env.TG_BOT_TOKEN || '').trim();
+const envChat = () => String(process.env.TG_CHAT_ID || '').trim();
+
+// Telegram API so'rovi: IPv4 orqali, vaqt chegarasi bilan (osilib qolmasligi uchun)
+function tg(method, payload) {
+  return new Promise((resolve) => {
+    const body = JSON.stringify(payload || {});
+    const req = https.request({
+      host: 'api.telegram.org',
+      path: `/bot${envToken()}/${method}`,
+      method: 'POST',
+      family: 4,
+      timeout: TG_TIMEOUT_MS,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => { data += c; });
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); }
+        catch (e) { resolve({ ok: false, error_code: res.statusCode, description: 'bad response' }); }
+      });
+    });
+    req.on('timeout', () => { req.destroy(new Error('timeout')); });
+    req.on('error', (e) => { resolve({ ok: false, error_code: 0, description: e.message === 'timeout' ? 'timeout' : 'network: ' + (e.code || e.message) }); });
+    req.end(body);
+  });
+}
 
 function originAllowed(req) {
   const origin = String(req.headers.origin || '');
@@ -38,20 +72,34 @@ function tooMany(ip, now) {
 }
 
 module.exports = async (req, res) => {
+  // --- tekshiruv: /api/lead?check=1 ---
+  const query = req.query || {};
+  if (req.method === 'GET' && query.check !== undefined) {
+    const out = { token_set: !!envToken(), chat_set: !!envChat(), chat_id: envChat() || null };
+    if (out.token_set) {
+      const me = await tg('getMe');
+      out.bot = me.ok ? '@' + me.result.username : 'XATO: ' + (me.description || me.error_code);
+      if (me.ok && out.chat_set) {
+        const ch = await tg('getChat', { chat_id: envChat() });
+        out.group = ch.ok ? ch.result.title : 'XATO: ' + (ch.description || ch.error_code);
+      }
+    }
+    res.status(200).json(out);
+    return;
+  }
+
   if (req.method !== 'POST') {
     res.status(405).json({ ok: false, error: 'POST only' });
     return;
   }
 
-  const token = process.env.TG_BOT_TOKEN;
-  const chatId = process.env.TG_CHAT_ID;
-  if (!token || !chatId) {
-    res.status(500).json({ ok: false, error: 'TG_BOT_TOKEN / TG_CHAT_ID is not set' });
+  if (!envToken() || !envChat()) {
+    res.status(500).json({ ok: false, error: 'env' });
     return;
   }
 
   if (!originAllowed(req)) {
-    res.status(403).json({ ok: false, error: 'forbidden' });
+    res.status(403).json({ ok: false, error: 'origin' });
     return;
   }
 
@@ -70,17 +118,17 @@ module.exports = async (req, res) => {
   const whom = clean(b.whom, 100);
 
   if (name.length < 2 || !PHONE_RE.test(phone) || /^(\d)\1+$/.test(phone.slice(2)) || !detail || !whom) {
-    res.status(400).json({ ok: false, error: 'bad input' });
+    res.status(400).json({ ok: false, error: 'input' });
     return;
   }
 
   const now = Date.now();
   const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || 'unknown';
-  if (tooMany(ip, now)) { res.status(429).json({ ok: false, error: 'too many' }); return; }
+  if (tooMany(ip, now)) { res.status(429).json({ ok: false, error: 'limit' }); return; }
 
-  const last = byPhone.get(phone);
-  byPhone.set(phone, now);
-  if (last && now - last < WINDOW_MS) { res.status(200).json({ ok: true }); return; }
+  // Shu raqam 10 daqiqa ichida MUVAFFAQIYATLI yuborilgan bo'lsa — takror, qayta yubormaymiz
+  const last = sentPhones.get(phone);
+  if (last && now - last < WINDOW_MS) { res.status(200).json({ ok: true, dup: true }); return; }
 
   const pretty = '+998 ' + phone.replace(/^(\d{2})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4');
   const time = new Date(now).toLocaleString('ru-RU', { timeZone: 'Asia/Tashkent' });
@@ -94,17 +142,12 @@ module.exports = async (req, res) => {
     '🕒 <b>Вақти:</b> ' + time + '\n' +
     '🌐 <b>Манба:</b> ' + esc(clean(b.source, 60) || 'Alivida Landing Page');
 
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!j.ok) byPhone.delete(phone);   // yuborilmagan bo'lsa, qayta urinishga ruxsat
-    res.status(j.ok ? 200 : 502).json({ ok: !!j.ok });
-  } catch (e) {
-    byPhone.delete(phone);
-    res.status(502).json({ ok: false });
+  const r = await tg('sendMessage', { chat_id: envChat(), text, parse_mode: 'HTML' });
+  if (r.ok) {
+    sentPhones.set(phone, Date.now());
+    res.status(200).json({ ok: true });
+  } else {
+    console.error('telegram sendMessage failed:', r.error_code, r.description);
+    res.status(502).json({ ok: false, error: 'tg_' + (r.error_code || (r.description === 'timeout' ? 'timeout' : 'net')) });
   }
 };
