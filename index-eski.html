@@ -371,8 +371,11 @@ function trackMetaLead(lead) {
 
 <script>
 (function () {
-  /* ---- Ariza Google Apps Script'ga yuboriladi: Google Sheets'ga yoziladi va Telegram'ga ketadi.
-         Apps Script javob bermasa — zaxira sifatida /api/lead (Vercel) ishlatiladi. Bot tokeni sahifada yo'q. ---- */
+  /* ---- Ariza Google Apps Script'ga yuboriladi: avval Google Sheets'ga yoziladi, keyin Telegram'ga ketadi.
+         Jadvalga yozilsa — ariza qabul qilingan (Telegram ishlamasa ham lead yo'qolmaydi).
+         Apps Script'da Telegram yiqilsa — Telegram'ga /api/lead (Vercel) orqali qayta urinib ko'riladi.
+         Apps Script umuman javob bermasa — /api/lead ham Telegram'ga, ham jadvalga yuboradi.
+         Bot tokeni sahifada yo'q. ---- */
   var LEAD_URL = 'https://script.google.com/macros/s/AKfycbx2_7rgdJ4zkvMyO6ilMHMpGJxVxltp8LwNivegzGl02eG4E3zclMH3bYElRO_L9PA/exec';
   var LOADED_AT = Date.now();
 
@@ -398,9 +401,13 @@ function trackMetaLead(lead) {
       website: hp ? hp.value : '', t: Date.now() - LOADED_AT, source: 'Alivida Landing (eski)'
     };
     return postJson(LEAD_URL, payload, true, 20000).then(function (j) {
-      if (j.ok) return true;
+      if (j.ok) {
+        /* jadvalga yozildi; Telegram Apps Script'da o'xshamagan bo'lsa — Vercel orqali yana bir urinish */
+        if (j.tg === false) postJson('/api/lead', payload, false, 15000);
+        return true;
+      }
       return postJson('/api/lead', payload, false, 15000).then(function (k) {
-        window.__leadErr = k.error || j.error || '';
+        window.__leadErr = k.ok ? '' : (k.error || j.error || '');
         return !!k.ok;
       });
     });
