@@ -416,6 +416,10 @@ function trackMetaLead(lead) {
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
   var PICK_MSG = 'Илтимос, бирини танланг';
   var PHONE_MSG = 'Рақамни тўлиқ киритинг (9 та рақам)';
+  var PHONE_BAD_MSG = 'Бундай рақам йўқ. Оператор кодини текширинг (90, 91, 93, 94, 95, 97, 98, 99, 33, 88, 77, 50, 20...)';
+  var NAME_MSG = 'Исмингизни тўлиқ ёзинг';
+  /* server (Apps Script va /api/lead) bilan bir xil tekshiruv */
+  function phoneOk(p) { return /^(20|33|50|55|77|88|90|91|93|94|95|97|98|99|6[1-9]|7[0-9])\d{7}$/.test(p) && !/^(\d)\1+$/.test(p.slice(2)); }
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -476,8 +480,10 @@ function trackMetaLead(lead) {
     if (!data.problem) { showError(F.problem, REQ_MSG); bad.push(F.problem); }
     if (!data.whom) { showError(F.whom, PICK_MSG); bad.push(F.whom); }
     if (!data.name) { showError(F.name, REQ_MSG); bad.push(F.name); }
+    else if (data.name.replace(/\s+/g, ' ').length < 2) { showError(F.name, NAME_MSG); bad.push(F.name); }
     if (!data.phone) { showError(F.phone, REQ_MSG); bad.push(F.phone); }
     else if (data.phone.length !== 9) { showError(F.phone, PHONE_MSG); bad.push(F.phone); }
+    else if (!phoneOk(data.phone)) { showError(F.phone, PHONE_BAD_MSG); bad.push(F.phone); }
     if (bad.length) {
       bad[0].ctrl.scrollIntoView({ behavior: 'smooth', block: 'center' });
       if (bad[0] !== F.whom) bad[0].input.focus({ preventScroll: true });
@@ -547,7 +553,9 @@ function trackMetaLead(lead) {
         submitted = false;
         btn.disabled = false;
         label.textContent = labelText;
-        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
+        sendErr.textContent = window.__leadErr === 'input'
+          ? 'Исм ёки рақам нотўғри киритилган. Текшириб, тугмани яна бир марта босинг.'
+          : 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
         sendErr.classList.add('on');
       }
     });

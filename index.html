@@ -248,6 +248,10 @@ function trackMetaLead(lead) {
 
   var REQ_MSG = 'Илтимос, бу майдонни тўлдиринг';
   var PHONE_MSG = 'Рақамни тўлиқ киритинг (9 та рақам)';
+  var PHONE_BAD_MSG = 'Бундай рақам йўқ. Оператор кодини текширинг (90, 91, 93, 94, 95, 97, 98, 99, 33, 88, 77, 50, 20...)';
+  var NAME_MSG = 'Исмингизни тўлиқ ёзинг';
+  /* server (Apps Script va /api/lead) bilan bir xil tekshiruv */
+  function phoneOk(p) { return /^(20|33|50|55|77|88|90|91|93|94|95|97|98|99|6[1-9]|7[0-9])\d{7}$/.test(p) && !/^(\d)\1+$/.test(p.slice(2)); }
 
   function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
@@ -310,8 +314,10 @@ function trackMetaLead(lead) {
     FIELDS.forEach(clearError);
     var bad = [];
     if (!d.name) { showError(nameEl, REQ_MSG); bad.push(nameEl); }
+    else if (d.name.replace(/\s+/g, ' ').length < 2) { showError(nameEl, NAME_MSG); bad.push(nameEl); }
     if (!d.digits) { showError(phoneEl, REQ_MSG); bad.push(phoneEl); }
     else if (d.digits.length !== 9) { showError(phoneEl, PHONE_MSG); bad.push(phoneEl); }
+    else if (!phoneOk(d.digits)) { showError(phoneEl, PHONE_BAD_MSG); bad.push(phoneEl); }
     if (!d.detail) { showError(inputEl, REQ_MSG); bad.push(inputEl); }
     if (!d.whom) { showError(whomEl, REQ_MSG); bad.push(whomEl); }
     if (bad.length) { bad[0].focus(); return null; }
@@ -368,7 +374,9 @@ function trackMetaLead(lead) {
       } else {
         submitted = false;
         btn.disabled = false; btn.textContent = label;
-        sendErr.textContent = 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
+        sendErr.textContent = window.__leadErr === 'input'
+          ? 'Исм ёки рақам нотўғри киритилган. Текшириб, тугмани яна бир марта босинг.'
+          : 'Ариза юборилмади. Интернетни текширинг ва тугмани яна бир марта босинг.' + (window.__leadErr ? ' (' + window.__leadErr + ')' : '');
         sendErr.classList.add('on');
       }
     });
